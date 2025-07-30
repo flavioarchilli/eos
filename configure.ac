@@ -84,36 +84,41 @@ AC_COMPILE_IFELSE([AC_LANG_SOURCE([
 CXXFLAGS=$save_CXXFLAGS
 dnl }}}
 CXXFLAGS="$CXXFLAGS -std=c++20"
-dnl {{{ check for <source_location>
-AC_MSG_CHECKING([for <source_location>])
+dnl {{{ full check for std::source_location }}
+AC_MSG_CHECKING([for working std::source_location])
 save_CXXFLAGS=$CXXFLAGS
 CXXFLAGS="$CXXFLAGS -std=c++20"
+
 AC_COMPILE_IFELSE([AC_LANG_SOURCE([
-	#ifdef __clang__
-	#  include <experimental/source_location>
-	#else
-	#  include <source_location>
-	#endif
-
-	#ifdef __clang__
-		using source_location = std::experimental::source_location;
-	#else
-		using source_location = std::source_location;
-	#endif
-
-	int main(int, char **)
-	{
-		auto loc = source_location::current();
-		return 0;
-	}
+  #include <source_location>
+  int main() {
+    std::source_location loc = std::source_location::current();
+    (void)loc;
+    return 0;
+  }
 ])],
-	[AC_MSG_RESULT([yes])],
-	[AC_MSG_RESULT([no])
-	 AC_MSG_ERROR([your compiler does not support <source_location>])
-	]
+  [AC_MSG_RESULT([yes])
+   AC_DEFINE([HAVE_STD_SOURCE_LOCATION], [1],
+     [Define if <source_location> + std::source_location compile cleanly])],
+  [AC_MSG_RESULT([no])
+   AC_MSG_CHECKING([for std::experimental::source_location])
+   AC_COMPILE_IFELSE([AC_LANG_SOURCE([
+     #include <experimental/source_location>
+     int main() {
+       std::experimental::source_location loc =
+         std::experimental::source_location::current();
+       (void)loc;
+       return 0;
+     }
+   ])],
+     [AC_MSG_RESULT([yes])
+      AC_DEFINE([HAVE_EXPERIMENTAL_SOURCE_LOCATION], [1],
+         [Define if experimental version compiles])],
+     [AC_MSG_ERROR([Neither std::source_location nor std::experimental/source_location supported])]
+   )]
 )
 CXXFLAGS=$save_CXXFLAGS
-dnl }}}
+dnl }}} full check for source_location
 dnl }}}
 
 dnl {{{ determine which pieces of EOS to build
@@ -130,17 +135,30 @@ AC_SUBST([MAYBE_SRC])
 dnl }}}
 
 dnl {{{ check for required packages
-dnl {{{ boost filesystem
-AC_CHECK_LIB([boost_filesystem], main,
-	[],
-	[AC_MSG_ERROR([you do seem to be lacking 'libboost_filesystem'.])]
-	)
-dnl }}}
-dnl {{{ boost system
-AC_CHECK_LIB([boost_system], main,
-	[],
-	[AC_MSG_ERROR([you do seem to be lacking 'libboost_system'.])]
-	)
+dnl {{{ boost filesystem + boost system
+AX_BOOST_BASE([0],
+  [  dnl action-if-found
+     AC_DEFINE([HAVE_BOOST_BASE], [1], [Boost base libraries found])
+  ],
+  [  dnl action-if-not-found
+     AC_MSG_ERROR([Boost libraries not found; please install boost-filesystem & boost-system])
+  ]
+)
+
+dnl Now check specifically for Filesystem + System:
+AX_BOOST_SYSTEM([0], [  dnl test linking system library
+  AC_DEFINE([HAVE_BOOST_SYSTEM], [1], [Boost.System found])
+],
+[
+  AC_MSG_ERROR([Missing Boost.System])
+])
+
+AX_BOOST_FILESYSTEM([0], [  dnl test linking filesystem library
+  AC_DEFINE([HAVE_BOOST_FILESYSTEM], [1], [Boost.Filesystem found])
+],
+[
+  AC_MSG_ERROR([Missing Boost.Filesystem])
+])
 dnl }}}
 dnl {{{ yaml-cpp
 PKG_CHECK_MODULES([YAMLCPP],

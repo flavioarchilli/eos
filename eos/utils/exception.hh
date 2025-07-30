@@ -23,18 +23,23 @@
 #include <exception>
 #include <memory>
 #include <string>
-#ifdef __clang__
-#  include <experimental/source_location>
+#ifdef HAVE_CONFIG_H
+# include <config.h>
+#endif
+#if defined(HAVE_STD_SOURCE_LOCATION)
+  #include <source_location>
+#elif defined(HAVE_EXPERIMENTAL_SOURCE_LOCATION)
+  #include <experimental/source_location>
 #else
-#  include <source_location>
+  #error "source_location is not supported"
 #endif
 
 namespace eos
 {
-#ifdef __clang__
-    using source_location = std::experimental::source_location;
-#else
+#if defined(HAVE_STD_SOURCE_LOCATION)
     using source_location = std::source_location;
+#elif defined(HAVE_EXPERIMENTAL_SOURCE_LOCATION)
+  using source_location = std::experimental::source_location;
 #endif
 
     class Context
